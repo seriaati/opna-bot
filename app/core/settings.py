@@ -14,9 +14,10 @@ class Settings(BaseSettings):
     # postgres_port: int = 5432
     # postgres_user: str = "postgres"
 
-    # @property
-    # def database_url(self) -> str:
-    #     return f"asyncpg://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+    @property
+    def database_url(self) -> str:
+        return ""
+        # return f"asyncpg://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
 
     @property
     def is_dev(self) -> bool:

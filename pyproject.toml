@@ -1,7 +1,7 @@
 [project]
-name = "app-bot"
+name = "opna-bot"
 version = "0.1.0"
-description = "Add your description here"
+description = "Opna bot"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -11,7 +11,6 @@ dependencies = [
     "loguru>=0.7.3",
     "pydantic-settings>=2.13.1",
     "python-dotenv>=1.2.2",
-    "tortoise-orm[asyncpg]>=1.1.7",
 ]
 
 [tool.pyright]
@@ -23,6 +22,3 @@ reportUnnecessaryContains = true
 reportUnnecessaryIsInstance = true
 reportUnnecessaryTypeIgnoreComment = true
 typeCheckingMode = "standard"
-
-[tool.tortoise]
-tortoise_orm = "app.db.conn.TORTOISE_ORM"

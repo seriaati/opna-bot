@@ -3,6 +3,7 @@ import contextlib
 
 from app.core.bot import OpnaBot
 from app.core.settings import SETTINGS
+from app.db.conn import Database
 from app.utils.logging import setup_logging
 
 
@@ -10,7 +11,7 @@ async def main() -> None:
     setup_logging()
 
     with contextlib.suppress(KeyboardInterrupt, asyncio.CancelledError):
-        async with OpnaBot() as bot:
+        async with Database(), OpnaBot() as bot:
             await bot.start(token=SETTINGS.discord_token)
 
 

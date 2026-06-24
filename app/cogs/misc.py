@@ -19,6 +19,8 @@ class MiscCog(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="分隊", description="把語音頻道裡的人分成兩隊")
+    @app_commands.rename(a_team_num="a隊人數", b_team_num="b隊人數")
+    @app_commands.describe(a_team_num="A 隊的人數", b_team_num="B 隊的人數")
     async def split_teams(
         self,
         i: Interaction,

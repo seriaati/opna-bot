@@ -31,12 +31,18 @@ class VoiceCog(commands.Cog):
         if after.channel is not None and after.channel.id == DYNAMIC_VC_TRIGGER_ID:
             await self._create_channel(member, after.channel)
 
-        if (
-            before.channel is not None
-            and not before.channel.members
-            and await VoiceChannel.filter(id=before.channel.id).exists()
-        ):
-            await self._delete_channel(before.channel)
+        if before.channel is not None and before.channel != after.channel:
+            record = await VoiceChannel.get_or_none(id=before.channel.id)
+            if record is None:
+                return
+            if not before.channel.members:
+                await self._delete_channel(before.channel)
+            elif record.owner_id == member.id:
+                successor = next(
+                    (m for m in before.channel.members if not m.bot), None
+                )
+                if successor is not None:
+                    await self._transfer_ownership(before.channel, record, successor)
 
     async def _create_channel(
         self, member: discord.Member, trigger: discord.VoiceChannel
@@ -66,6 +72,25 @@ class VoiceCog(commands.Cog):
             await channel.delete()
         except discord.HTTPException:
             logger.exception(f"Failed to delete dynamic voice channel {channel.id}")
+
+    async def _transfer_ownership(
+        self,
+        channel: discord.VoiceChannel,
+        record: VoiceChannel,
+        new_owner: discord.Member,
+    ) -> None:
+        old_owner = channel.guild.get_member(record.owner_id)
+        if old_owner is not None:
+            await channel.set_permissions(old_owner, overwrite=None)
+        await channel.set_permissions(
+            new_owner,
+            overwrite=discord.PermissionOverwrite(
+                manage_channels=True, move_members=True
+            ),
+        )
+        await channel.edit(name=f"{new_owner.display_name} 的語音")
+        record.owner_id = new_owner.id
+        await record.save()
 
     async def _resolve_owned_channel(
         self, i: Interaction
@@ -104,19 +129,31 @@ class VoiceCog(commands.Cog):
 
         await i.response.send_message(f"已鎖定 {channel.mention}", ephemeral=True)
 
-    @voice.command(name="解鎖", description="解鎖你的語音頻道, 讓所有人都能加入")
-    async def unlock(self, i: Interaction) -> None:
-        """解鎖你的語音頻道, 讓所有人都能加入"""
+    @voice.command(name="解鎖", description="解鎖你的語音頻道, 讓所有人或指定成員加入")
+    @app_commands.rename(member="成員")
+    @app_commands.describe(member="僅解鎖給指定成員 (留空則解鎖給所有人)")
+    async def unlock(
+        self, i: Interaction, member: discord.Member | None = None
+    ) -> None:
+        """解鎖你的語音頻道, 讓所有人或指定成員加入"""
         channel = await self._resolve_owned_channel(i)
         if channel is None:
             return
 
-        everyone = channel.guild.default_role
-        overwrite = channel.overwrites_for(everyone)
-        overwrite.connect = None
-        await channel.set_permissions(everyone, overwrite=overwrite)
+        if member is None:
+            everyone = channel.guild.default_role
+            overwrite = channel.overwrites_for(everyone)
+            overwrite.connect = None
+            await channel.set_permissions(everyone, overwrite=overwrite)
+            await i.response.send_message(f"已解鎖 {channel.mention}", ephemeral=True)
+            return
 
-        await i.response.send_message(f"已解鎖 {channel.mention}", ephemeral=True)
+        overwrite = channel.overwrites_for(member)
+        overwrite.connect = True
+        await channel.set_permissions(member, overwrite=overwrite)
+        await i.response.send_message(
+            f"已解鎖 {channel.mention} 給 {member.mention}", ephemeral=True
+        )
 
     @voice.command(name="重新命名", description="重新命名你的語音頻道")
     @app_commands.rename(name="名稱")
@@ -129,6 +166,29 @@ class VoiceCog(commands.Cog):
 
         await channel.edit(name=name)
         await i.response.send_message(f"已重新命名為 {channel.mention}", ephemeral=True)
+
+    @voice.command(name="轉移", description="將語音頻道的擁有權轉移給頻道內的其他成員")
+    @app_commands.rename(member="成員")
+    @app_commands.describe(member="要接收擁有權的成員")
+    async def transfer(self, i: Interaction, member: discord.Member) -> None:
+        """將語音頻道的擁有權轉移給頻道內的其他成員"""
+        channel = await self._resolve_owned_channel(i)
+        if channel is None:
+            return
+
+        if member.bot or member == i.user:
+            await i.response.send_message("無法轉移擁有權給該成員", ephemeral=True)
+            return
+
+        if member not in channel.members:
+            await i.response.send_message("該成員不在這個頻道裡", ephemeral=True)
+            return
+
+        record = await VoiceChannel.get(id=channel.id)
+        await self._transfer_ownership(channel, record, member)
+        await i.response.send_message(
+            f"已將 {channel.mention} 的擁有權轉移給 {member.mention}", ephemeral=True
+        )
 
 
 async def setup(bot: OpnaBot) -> None:
